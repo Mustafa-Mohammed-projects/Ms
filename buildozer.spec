@@ -1,11 +1,10 @@
 [app]
-title = مدير الملفات
-package.name = filemanager
-package.domain = org.example
+title = MS 
+package.name = ms
+package.domain = com.kami3kaze.ms
 
 source.dir = .
-source.include_exts = py,kv,png,jpg,atlas
-
+requirements = python3,kivy, plyer,pillow,android
 version = 1.0
 requirements = python3,kivy
 
@@ -13,12 +12,20 @@ orientation = portrait
 fullscreen = 0
 
 # صلاحيات الوصول لملفات الهاتف
-android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
-
+android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 android.api = 33
 android.minapi = 21
-android.archs = arm64-v8a, armeabi-v7a
+android.archs = arm64-v8a
 
+android.allow_backup = True
+android.private_storage = False
+p4a.branch = v2024.01.21
+
+android.release_artifact = apk
+android.keystore = 
+android.keystore_passwd = 
+android.keyalias = 
+android.keyalias_passwd = 
 [buildozer]
 log_level = 2
 warn_on_root = 1
