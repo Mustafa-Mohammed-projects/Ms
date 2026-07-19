@@ -10,7 +10,8 @@ requirements = python3,kivy
 
 orientation = portrait
 fullscreen = 0
-
+icon.filename = %(source.dir)s/icon.png
+presplash.filename = %(source.dir)s/presplash.png
 # صلاحيات الوصول لملفات الهاتف
 android.permissions = WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 android.api = 33
