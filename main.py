@@ -28,13 +28,18 @@ import io
 # For Android storage access
 try:
     from android.permissions import request_permissions, Permission
+    HAS_ANDROID_PERMS = True
 except ImportError:
+    HAS_ANDROID_PERMS = False
     Permission = None
     request_permissions = None
 
-# Register the Musnad font
-resource_add_path(os.path.dirname(os.path.abspath(__file__)))
-LabelBase.register(name='Musnad', fn_regular='ms.ttf')
+# Register the Musnad font - wrap in try/except to prevent crashes
+try:
+    resource_add_path(os.path.dirname(os.path.abspath(__file__)))
+    LabelBase.register(name='Musnad', fn_regular='ms.ttf')
+except Exception as e:
+    Logger.warning(f'Font registration warning: {str(e)}')
 
 class MusnadConverterApp(App):
     def build(self):
@@ -51,8 +56,8 @@ class MusnadConverterApp(App):
         # Build UI
         self.build_ui()
 
-        # Request permissions if on Android
-        if platform == 'android':
+        # Request permissions if on Android - only if module is available
+        if platform == 'android' and HAS_ANDROID_PERMS:
             self.request_permissions()
 
         return self.root
@@ -118,7 +123,7 @@ class MusnadConverterApp(App):
 
     def on_text_change(self, instance, value):
         # Update character counter
-        self.char_count_label.text = f'{len(value)} chars'
+        self.char_count_label.text = '{} chars'.format(len(value))
         # Show text in Musnad font (live preview)
         if value.strip() == '':
             self.output_label.text = 'Enter text and press Convert'
@@ -144,18 +149,22 @@ class MusnadConverterApp(App):
         example = 'بسم الله الرحمن الرحيم\nالحمد لله رب العالمين'
         self.text_input.text = example
         self.output_label.text = example
-        self.char_count_label.text = f'{len(example)} chars'
+        self.char_count_label.text = '{} chars'.format(len(example))
         self.status_label.text = 'Example loaded'
 
     def test_font(self, instance):
         test_str = 'المُسند خط عربي قديم'
         self.text_input.text = test_str
         self.output_label.text = test_str
-        self.char_count_label.text = f'{len(test_str)} chars'
+        self.char_count_label.text = '{} chars'.format(len(test_str))
         self.status_label.text = 'Font test: working'
 
     def request_permissions(self):
-        if Permission:
+        if not HAS_ANDROID_PERMS or not request_permissions:
+            Logger.warning('Android permissions module not available')
+            return
+            
+        try:
             perms = [Permission.WRITE_EXTERNAL_STORAGE, Permission.READ_EXTERNAL_STORAGE]
             # On Android 11+ we may need MANAGE_EXTERNAL_STORAGE
             try:
@@ -164,14 +173,9 @@ class MusnadConverterApp(App):
                     perms.append(Perm.MANAGE_EXTERNAL_STORAGE)
             except:
                 pass
-            request_permissions(perms, self.permissions_callback)
-
-    def permissions_callback(self, permissions, grant_results):
-        for perm, result in zip(permissions, grant_results):
-            if result:
-                Logger.info(f'Permission {perm} granted')
-            else:
-                Logger.warning(f'Permission {perm} denied')
+            request_permissions(perms)
+        except Exception as e:
+            Logger.error('Error requesting permissions: {}'.format(str(e)))
 
     def get_download_path(self):
         """Determine the download folder path"""
@@ -194,7 +198,8 @@ class MusnadConverterApp(App):
                         f.write('test')
                     os.remove(test_file)
                     return path
-                except:
+                except Exception as e:
+                    Logger.debug('Path {} not writable: {}'.format(path, str(e)))
                     continue
             # Fallback: app internal folder
             app_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ms_images')
@@ -234,7 +239,7 @@ class MusnadConverterApp(App):
 
         # Run in separate thread to avoid UI freeze
         from threading import Thread
-        Thread(target=self._download_images_thread, args=(text,)).start()
+        Thread(target=self._download_images_thread, args=(text,), daemon=True).start()
 
     def _download_images_thread(self, text):
         try:
@@ -249,12 +254,15 @@ class MusnadConverterApp(App):
             os.makedirs(save_dir, exist_ok=True)
 
             # Delete old images (optional)
-            for f in os.listdir(save_dir):
-                if f.endswith('.png') and f.startswith('musnad_page_'):
-                    try:
-                        os.remove(os.path.join(save_dir, f))
-                    except:
-                        pass
+            try:
+                for f in os.listdir(save_dir):
+                    if f.endswith('.png') and f.startswith('musnad_page_'):
+                        try:
+                            os.remove(os.path.join(save_dir, f))
+                        except:
+                            pass
+            except Exception as e:
+                Logger.warning('Could not clean old images: {}'.format(str(e)))
 
             # Prepare font
             font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ms.ttf')
@@ -264,7 +272,8 @@ class MusnadConverterApp(App):
                 if os.path.exists(alt_path):
                     font_path = alt_path
                 else:
-                    self.status_label.text = 'Error: ms.ttf font file not found'
+                    Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', 'Error: ms.ttf font file not found'), 0)
+                    Clock.schedule_once(lambda dt: setattr(self.download_btn, 'disabled', False), 0)
                     return
 
             font_size = 48
@@ -299,21 +308,23 @@ class MusnadConverterApp(App):
                     y += line_height
 
                 # Draw page number
-                number_text = f'Image {idx} of {len(parts)}'
+                number_text = 'Image {} of {}'.format(idx, len(parts))
                 draw.text((max_width//2, total_height - 10), number_text, font=ImageFont.load_default(), fill='#6d4c3a', anchor='ms')
 
                 # Save image
-                filename = f'musnad_page_{idx}.png'
+                filename = 'musnad_page_{}.png'.format(idx)
                 filepath = os.path.join(save_dir, filename)
                 img.save(filepath, 'PNG')
 
-            self.status_label.text = f'Saved {len(parts)} images to {save_dir}'
-            self.download_btn.disabled = False
+            message = 'Saved {} images to {}'.format(len(parts), save_dir)
+            Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', message), 0)
+            Clock.schedule_once(lambda dt: setattr(self.download_btn, 'disabled', False), 0)
 
         except Exception as e:
             Logger.exception('Error in download_images_thread')
-            self.status_label.text = f'Error: {str(e)}'
-            self.download_btn.disabled = False
+            error_msg = 'Error: {}'.format(str(e))
+            Clock.schedule_once(lambda dt: setattr(self.status_label, 'text', error_msg), 0)
+            Clock.schedule_once(lambda dt: setattr(self.download_btn, 'disabled', False), 0)
 
 if __name__ == '__main__':
     MusnadConverterApp().run()
