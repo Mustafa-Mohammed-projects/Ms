@@ -2,7 +2,7 @@
 title = MS 
 package.name = ms
 package.domain = com.kami3kaze.ms
-
+source.include_exts = py,png,jpg,kv,atlas,bin,json,ttf
 source.dir = .
 requirements = python3,kivy, plyer,pillow,android
 version = 1.0
